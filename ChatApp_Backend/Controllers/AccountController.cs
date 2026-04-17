@@ -1,0 +1,216 @@
+﻿using ChatApp_Backend.DTO;
+using ChatApp_Backend.Models;
+using ChatApp_Backend.Repository;
+using ChatApp_Backend.Services;
+using AutoMapper;
+using Google.Apis.Auth;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.VisualBasic;
+using System.ComponentModel.DataAnnotations;
+using System.Security.Claims;
+using System.Text.Json;
+
+namespace ChatApp_Backend.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class AccountController : ControllerBase
+    {
+        private readonly IUserRepository userRepository;
+        private readonly IMapper mapper;
+        private readonly ITokenService tokenService;
+        private readonly IUserService userService;
+        private readonly IHttpContextAccessor httpContextAccessor;
+
+        public AccountController(IUserRepository userRepository, IMapper mapper, ITokenService tokenService, IUserService userService, IHttpContextAccessor httpContextAccessor)
+        {
+            this.userRepository = userRepository;
+            this.mapper = mapper;
+            this.tokenService = tokenService;
+            this.userService = userService;
+            this.httpContextAccessor = httpContextAccessor;
+        }
+        [HttpPost("Register")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Register(RegisterRequestDTO request)
+        {
+            var user = await userRepository.GetUserByEmail(request.Email);
+            if ( user != null)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("This Email is Already Exist"));
+            }
+            AppUser newUser = mapper.Map<AppUser>(request);
+            RefreshTokenHash refreshTokenHash = await tokenService.GetRefreshToken();
+            newUser.RefreshToken = refreshTokenHash.HashedRefreshToken;
+            newUser.RefreshTokenExpiration = tokenService.GetRefreshTokenExp();
+            newUser.UserName = await userService.GenerateUserName(newUser.FirstName, newUser.LastName);
+            IdentityResult result = await userRepository.AddUser(newUser, request.Password);
+            if (!result.Succeeded)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Create User", result.Errors.Select(e => e.Description.ToString()).ToList()));
+            }
+            RegisterLoginResponseDTO responseDTO = mapper.Map<RegisterLoginResponseDTO>(newUser);
+            responseDTO.AccessToken = await tokenService.GenerateAccessToken(newUser);
+            responseDTO.RefreshToken = refreshTokenHash.RefreshToken;
+            return Ok(ApiResponse<RegisterLoginResponseDTO>.SuccessResponse(responseDTO));
+        }
+        [HttpPost("Login")]
+        [AllowAnonymous]
+        public async Task<IActionResult> Login(LoginRequestDTO loginRequest)
+        {
+            AppUser? user = await userRepository.GetUserByEmail(loginRequest.Email);
+            if(user == null)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Email or Password Invalid"));
+            }
+            bool isPasswordValid = await userRepository.CheckUserPassword(user, loginRequest.Password);
+            if (!isPasswordValid)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Email or Password Invalid"));
+            }
+            RefreshTokenHash refreshTokenHash = await tokenService.GetRefreshToken();
+            user.RefreshToken = refreshTokenHash.HashedRefreshToken;
+            user.RefreshTokenExpiration = tokenService.GetRefreshTokenExp();
+            IdentityResult result = await userRepository.UpdateUser(user);
+            if (!result.Succeeded)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Create User", result.Errors.Select(e => e.Description.ToString()).ToList()));
+            }
+            RegisterLoginResponseDTO responseDTO = mapper.Map<RegisterLoginResponseDTO>(user);
+            responseDTO.AccessToken = await tokenService.GenerateAccessToken(user);
+            responseDTO.RefreshToken = refreshTokenHash.RefreshToken;
+            return Ok(ApiResponse<RegisterLoginResponseDTO>.SuccessResponse(responseDTO));
+        }
+        [HttpGet("CurrentUser")]
+        [Authorize]
+        public async Task<IActionResult> GetCurrentUser()
+        {
+            Claim? claim = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            if(claim == null)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Get The Current User"));
+            }
+            AppUser? appuser = await userRepository.GetUserByEmail(claim.Value);
+            if(appuser == null)
+            {
+                return NotFound(ApiResponse<object>.FailResponse("User Not Found"));
+            }
+            RegisterLoginResponseDTO userResponse = mapper.Map<RegisterLoginResponseDTO>(appuser);
+            return Ok(ApiResponse<RegisterLoginResponseDTO>.SuccessResponse(userResponse));
+        }
+
+        [HttpPost("NewAccessToken")]
+        [AllowAnonymous]
+        public async Task<IActionResult> NewAccessToken(AccessTokenRequest request)
+        {
+            string hashedRefreshToken = tokenService.HashRefreshToken(request.RefreshToken);
+            AppUser? user = await userRepository.GetUserByRefreshToken(hashedRefreshToken);
+            if(user == null)
+            {
+                return NotFound(ApiResponse<object>.FailResponse("RefreshToken Not Exist"));
+            }
+            else if(user.RefreshTokenExpiration < DateTime.Now)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("RefreshToken Expired"));
+            }
+            string accessToken = await tokenService.GenerateAccessToken(user);
+            return Ok(ApiResponse<object>.SuccessResponse(new { accessToken = accessToken }));
+        }
+
+        [HttpGet("/auth/google")]
+        [AllowAnonymous]
+        public IActionResult GetGoogleAuthUri()
+        {
+            GoogleUrlBuilderDTO googleUrlBuilder = tokenService.BuildGoogleAuthUrl();
+            return Redirect(googleUrlBuilder.ToString());
+        }
+        [HttpGet("/auth/google/callback")]
+        public async Task<IActionResult> GetCodeResponse([FromQuery]string code)
+        {
+            GoogleUrlBuilderDTO googleUrlBuilder = tokenService.BuildGoogleAuthUrl();
+            GoogleTokenResponseDTO? tokenData;
+            GoogleJsonWebSignature.Payload payload;
+            try
+            {
+                tokenData = await tokenService.GetGoogleToken(code);
+                if (tokenData?.IdToken == null)
+                    return BadRequest(ApiResponse<object>.FailResponse("Failed to get token from Google"));
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Authenticate with Google", [ex.Message]));
+            }
+            try
+            {
+                var settings = new GoogleJsonWebSignature.ValidationSettings
+                {
+                    Audience = new[] { googleUrlBuilder.ClientID }
+                };
+                payload =
+                    await GoogleJsonWebSignature.ValidateAsync(tokenData.IdToken, settings);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Validation Failled", [ex.Message]));
+            }
+            AppUser? user = await userRepository.GetUserByEmail(payload.Email);
+            var refreshTokenHashed = await tokenService.GetRefreshToken();
+            if(user == null)
+            {
+                user = new AppUser();
+                user.Email = payload.Email;
+                user.FirstName = payload.GivenName;
+                user.LastName = payload.FamilyName;
+                user.UserName = payload.Email.Split("@")[0];
+                user.RefreshToken = refreshTokenHashed.HashedRefreshToken;
+                user.RefreshTokenExpiration = tokenService.GetRefreshTokenExp();
+                var result = await userRepository.AddUserNoPass(user);
+                if (!result.Succeeded)
+                {
+                    return BadRequest(ApiResponse<object>.FailResponse("Failed to Create User", result.Errors.Select(e => e.Description.ToString()).ToList()));
+                }
+            }
+            else
+            {
+                user.RefreshToken = refreshTokenHashed.HashedRefreshToken;
+                user.RefreshTokenExpiration = tokenService.GetRefreshTokenExp();
+                var result = await userRepository.UpdateUser(user);
+                if (!result.Succeeded)
+                {
+                    return BadRequest(ApiResponse<object>.FailResponse("Failed to Get User", result.Errors.Select(e => e.Description.ToString()).ToList()));
+                }
+            }
+            RegisterLoginResponseDTO responseDTO = mapper.Map<RegisterLoginResponseDTO>(user);
+            responseDTO.AccessToken = await tokenService.GenerateAccessToken(user);
+            responseDTO.RefreshToken = refreshTokenHashed.RefreshToken;
+            return Ok(ApiResponse<RegisterLoginResponseDTO>.SuccessResponse(responseDTO));
+        }
+
+        [HttpGet("logout")]
+        [Authorize]
+        public async Task<IActionResult> Logout()
+        {
+            Claim? claim = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
+            if (claim == null)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Get The Current User"));
+            }
+            AppUser? appuser = await userRepository.GetUserByEmail(claim.Value);
+            if (appuser == null)
+            {
+                return NotFound(ApiResponse<object>.FailResponse("User Not Found"));
+            }
+            appuser.RefreshToken = null;
+            appuser.RefreshTokenExpiration = null;
+            var result = await userRepository.UpdateUser(appuser);
+            if (!result.Succeeded)
+            {
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Revoke the Refresh Token", result.Errors.Select(e => e.Description).ToList()));
+            };
+            return Ok(ApiResponse<object>.SuccessResponse(null, message: "User Logged out Successfully"));
+        }
+
+    }
+}
