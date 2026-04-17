@@ -1,4 +1,4 @@
-﻿using ChatApp_Backend.DTO;
+﻿using ChatApp_Backend.DTO.Account;
 using ChatApp_Backend.Models;
 using ChatApp_Backend.Repository;
 using Microsoft.AspNetCore.Authentication.JwtBearer;

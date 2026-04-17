@@ -11,6 +11,7 @@ using Microsoft.VisualBasic;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
+using ChatApp_Backend.DTO.Account;
 
 namespace ChatApp_Backend.Controllers
 {

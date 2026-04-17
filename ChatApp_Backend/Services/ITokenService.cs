@@ -1,4 +1,4 @@
-﻿using ChatApp_Backend.DTO;
+﻿using ChatApp_Backend.DTO.Account;
 using ChatApp_Backend.Models;
 
 namespace ChatApp_Backend.Services

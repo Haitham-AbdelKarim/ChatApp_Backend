@@ -1,6 +1,6 @@
 ﻿using System.Text.Json.Serialization;
 
-namespace ChatApp_Backend.DTO
+namespace ChatApp_Backend.DTO.Account
 {
     public class GoogleTokenResponseDTO
     {

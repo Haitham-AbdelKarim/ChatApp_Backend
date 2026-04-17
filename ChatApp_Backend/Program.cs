@@ -1,5 +1,7 @@
 using ChatApp_Backend.Context;
 using ChatApp_Backend.DTO;
+using ChatApp_Backend.DTO.Account;
+using ChatApp_Backend.DTO.Group;
 using ChatApp_Backend.Exceptions;
 using ChatApp_Backend.Models;
 using ChatApp_Backend.Repository;
@@ -66,10 +68,14 @@ namespace ChatApp_Backend
             builder.Services.AddScoped<IUserRepository, UserRepository>();
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IUserService, UserService>();
+            builder.Services.AddScoped<IGroupRepositroy, GroupRepositroy>();
             builder.Services.AddAutoMapper(config =>
             {
                 config.CreateMap<RegisterRequestDTO, AppUser>();
                 config.CreateMap<AppUser, RegisterLoginResponseDTO>();
+                config.CreateMap<CreateGroupRequestDTO, Group>();
+                config.CreateMap<Group, GroupResponseDTO>();
+
             });
 
             builder.Services.AddAuthentication(options =>

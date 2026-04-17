@@ -1,4 +1,4 @@
-﻿namespace ChatApp_Backend.DTO
+﻿namespace ChatApp_Backend.DTO.Account
 {
     public class RefreshTokenHash
     {
