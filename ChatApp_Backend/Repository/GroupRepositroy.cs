@@ -1,5 +1,6 @@
 ﻿using ChatApp_Backend.Context;
 using ChatApp_Backend.Models;
+using Microsoft.EntityFrameworkCore;
 
 namespace ChatApp_Backend.Repository
 {
@@ -28,7 +29,7 @@ namespace ChatApp_Backend.Repository
 
         public Group? GetGroupById(int id)
         {
-            return chatAppDbContext.Groups.FirstOrDefault(g => g.Id == id);
+            return chatAppDbContext.Groups.Include(g => g.Users).FirstOrDefault(g => g.Id == id);
         }
 
         public List<Group> GetGroupsByName(string groupName)

@@ -16,7 +16,8 @@ namespace ChatApp_Backend.Repository
         }
         public async Task<AppUser?> GetUserByEmail(string email)
         {
-            AppUser? user = await userManager.FindByEmailAsync(email);
+            AppUser? user = await userManager.Users.Include(u => u.Groups).FirstOrDefaultAsync(u => u.Email == email);
+            //AppUser? user = await userManager.FindByEmailAsync(email);
             return user;
         }
 

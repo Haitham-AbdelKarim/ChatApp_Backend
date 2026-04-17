@@ -6,6 +6,6 @@ namespace ChatApp_Backend.DTO.Group
     {
         [Required]
         public string Name { get; set; }
-        public string? Descrpition { get; set; }
+        public string? Description { get; set; }
     }
 }
