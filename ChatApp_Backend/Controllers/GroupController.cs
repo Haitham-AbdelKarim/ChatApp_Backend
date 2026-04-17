@@ -26,6 +26,7 @@ namespace ChatApp_Backend.Controllers
         {
             this.mapper = mapper;
             this.groupRepositroy = groupRepositroy;
+            this.httpContextAccessor = httpContextAccessor;
             this.userRepository = userRepository;
             this.userService = userService;
         }
@@ -97,6 +98,21 @@ namespace ChatApp_Backend.Controllers
             if (group == null) return BadRequest(ApiResponse<object>.FailResponse("Group Not Found"));
             int num = group.Users.Count;
             return Ok(ApiResponse<int>.SuccessResponse(num));
+        }
+
+        [HttpGet("GetUserGroups")]
+        public async Task<IActionResult> GetUserGroups()
+        {
+            AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
+            if (appuser == null) return BadRequest(ApiResponse<object>.FailResponse("Can Not Get The Current User"));
+            List<GroupResponseDTO> response = new List<GroupResponseDTO>();
+            foreach (var group in appuser.Groups)
+            {
+                GroupResponseDTO gRes = mapper.Map<GroupResponseDTO>(group);
+                gRes.NumOFUsers = group.Users.Count;
+                response.Add(gRes);
+            }
+            return Ok(ApiResponse<List<GroupResponseDTO>>.SuccessResponse(response));
         }
     }
 }

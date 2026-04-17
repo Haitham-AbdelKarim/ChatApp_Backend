@@ -483,3 +483,4 @@ $RECYCLE.BIN/
 
 Migrations/
 /ChatApp_Backend/appsettings.json
+/ChatApp_Backend/wwwroot

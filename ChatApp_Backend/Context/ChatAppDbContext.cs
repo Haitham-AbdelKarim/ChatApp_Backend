@@ -8,6 +8,7 @@ namespace ChatApp_Backend.Context
     {
         public DbSet<Group> Groups { get; set; }
         public DbSet<Messages> Messages { get; set; }
+        public DbSet<UserConnectionIDs> UserConnectionIDs { get; set; }
         public ChatAppDbContext(DbContextOptions<ChatAppDbContext> options) : base(options)
         {
         }

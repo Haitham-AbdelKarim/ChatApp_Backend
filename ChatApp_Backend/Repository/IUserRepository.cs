@@ -7,6 +7,7 @@ namespace ChatApp_Backend.Repository
     public interface IUserRepository
     {
         public Task<AppUser?> GetUserByEmail(string email);
+        public Task<AppUser?> GetUserById(string id);
         public Task<AppUser?> GetUserByRefreshToken(string refreshToken);
         public Task<IdentityResult> AddUser(AppUser user, string passWord);
         public Task<IdentityResult> AddUserNoPass(AppUser user);

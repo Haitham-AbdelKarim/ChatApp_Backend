@@ -2,7 +2,9 @@ using ChatApp_Backend.Context;
 using ChatApp_Backend.DTO;
 using ChatApp_Backend.DTO.Account;
 using ChatApp_Backend.DTO.Group;
+using ChatApp_Backend.DTO.Message;
 using ChatApp_Backend.Exceptions;
+using ChatApp_Backend.Hubs;
 using ChatApp_Backend.Models;
 using ChatApp_Backend.Repository;
 using ChatApp_Backend.Services;
@@ -69,12 +71,16 @@ namespace ChatApp_Backend
             builder.Services.AddScoped<ITokenService, TokenService>();
             builder.Services.AddScoped<IUserService, UserService>();
             builder.Services.AddScoped<IGroupRepositroy, GroupRepositroy>();
+            builder.Services.AddScoped<IMessageRepository, MessageRepository>();
+            builder.Services.AddScoped<IUserConnectionIDsRepository, UserConnectionIDsRepository>();
+
             builder.Services.AddAutoMapper(config =>
             {
                 config.CreateMap<RegisterRequestDTO, AppUser>();
                 config.CreateMap<AppUser, RegisterLoginResponseDTO>();
                 config.CreateMap<CreateGroupRequestDTO, Group>();
                 config.CreateMap<Group, GroupResponseDTO>();
+                config.CreateMap<Messages, MessageDTO>();
 
             });
 
@@ -98,7 +104,25 @@ namespace ChatApp_Backend
                     ValidAudience = builder.Configuration["JwtSetting:Audience"],
                     IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSetting:Key"] ?? string.Empty))
                 };
+
+                option.Events = new JwtBearerEvents
+                {
+                    OnMessageReceived = context =>
+                    {
+                        var accessToken = context.Request.Query["access_token"];
+                        var path = context.HttpContext.Request.Path;
+
+                        if (!string.IsNullOrEmpty(accessToken) &&
+                            path.StartsWithSegments("/chatHub")) // your hub endpoint
+                        {
+                            context.Token = accessToken;
+                        }
+
+                        return Task.CompletedTask;
+                    }
+                };
             });
+            builder.Services.AddSignalR();
             builder.Services.AddHttpClient();
 
             // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
@@ -118,7 +142,10 @@ namespace ChatApp_Backend
                     options.EnablePersistAuthorization();
                 });
             }
+            app.MapHub<ChatHub>("/chatHub");
+            app.MapHub<ChatHub>("/videoHub");
             app.UseCors("PolicyCors");
+            app.UseStaticFiles();
             app.UseExceptionHandler(o => { });
             app.UseAuthentication();
             app.UseAuthorization();

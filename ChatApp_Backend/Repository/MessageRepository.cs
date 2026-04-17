@@ -25,36 +25,26 @@ namespace ChatApp_Backend.Repository
             string userId = user.Id;
             //List<Messages> messages = new List<Messages>();
             List <GetChatsDTO> chats = new List<GetChatsDTO>();
-            var messages = chatAppDbContext.Messages.Include(m => m.Receiver).Where(m => m.SenderId == userId && m.ReceiverId != null)
-                                                    .GroupBy(m => m.ReceiverId)
-                                                    .Select(g => g.OrderByDescending(m => m.SendingTime).FirstOrDefault())
-                                                    .ToList();
-            foreach(var message in messages)
-            {
-                GetChatsDTO chatsDTO = new GetChatsDTO
-                {
-                    ChatType = "Direct",
-                    ChatId = message.ReceiverId,
-                    GroupId = null,
-                    GroupName = null,
-                    SenderName = $"{message.Receiver.FirstName} {message.Receiver.LastName}",
-                    MessageType = message.MessageType,
-                    LastMessage = message.Message,
-                    SendingTime = message.SendingTime
-                };
-                chats.Add(chatsDTO);
-            }
-
-            messages = chatAppDbContext.Messages.Include(m => m.Sender).Where(m => m.SenderId != null && m.ReceiverId == userId)
-                                                .GroupBy(m => m.SenderId)
-                                                .Select(g => g.OrderByDescending(m => m.SendingTime).FirstOrDefault())
-                                                .ToList();
+            var messages = chatAppDbContext.Messages.Where(m =>(m.SenderId == userId || m.ReceiverId == userId) && m.ReceiverId != null)
+                            .Select(m => new
+                            {
+                                m,
+                                OtherUserId = m.SenderId == userId
+                                    ? m.ReceiverId!
+                                    : m.SenderId
+                            })
+                            .GroupBy(x => x.OtherUserId)
+                            .Select(g => g
+                                .OrderByDescending(x => x.m.SendingTime)
+                                .Select(x => x.m)
+                                .First())
+                            .ToList();
             foreach (var message in messages)
             {
                 GetChatsDTO chatsDTO = new GetChatsDTO
                 {
                     ChatType = "Direct",
-                    ChatId = message.SenderId,
+                    ChatId = message.SenderId == userId ? message.ReceiverId : message.SenderId,
                     GroupId = null,
                     GroupName = null,
                     SenderName = $"{message.Sender.FirstName} {message.Sender.LastName}",
@@ -109,6 +99,11 @@ namespace ChatApp_Backend.Repository
                 chat.Add(messageDTO);
             }
             return chat;
+        }
+        public void CreateMessage(Messages messages)
+        {
+            chatAppDbContext.Messages.Add(messages);
+            chatAppDbContext.SaveChanges();
         }
     }
 }

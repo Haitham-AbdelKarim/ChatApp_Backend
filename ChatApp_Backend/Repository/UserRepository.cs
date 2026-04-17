@@ -80,5 +80,12 @@ namespace ChatApp_Backend.Repository
         {
             return await userManager.Users.FirstOrDefaultAsync(user => user.RefreshToken == refreshToken);
         }
+
+        public async Task<AppUser?> GetUserById(string id)
+        {
+            AppUser? user = await userManager.Users.Include(u => u.Groups).FirstOrDefaultAsync(u => u.Id == id);
+            //AppUser? user = await userManager.FindByEmailAsync(email);
+            return user;
+        }
     }
 }

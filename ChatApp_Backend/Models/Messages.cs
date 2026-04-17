@@ -6,7 +6,8 @@ namespace ChatApp_Backend.Models
     {
         Text,
         Audio,
-        Video
+        Video,
+        Photo
     }
     public class Messages
     {

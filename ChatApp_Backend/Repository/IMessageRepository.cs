@@ -7,5 +7,6 @@ namespace ChatApp_Backend.Repository
     {
         public List<GetChatsDTO> GetUserChats(AppUser user);
         public List<MessageDTO> GetDirectChatMessage(string senderId, string receiverId);
+        public void CreateMessage(Messages messages);
     }
 }
