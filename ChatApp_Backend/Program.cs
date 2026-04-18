@@ -123,7 +123,7 @@ namespace ChatApp_Backend
                         var path = context.HttpContext.Request.Path;
 
                         if (!string.IsNullOrEmpty(accessToken) &&
-                            path.StartsWithSegments("/chatHub")) // your hub endpoint
+                            (path.StartsWithSegments("/chatHub") || path.StartsWithSegments("/videoHub")))
                         {
                             context.Token = accessToken;
                         }
@@ -153,7 +153,7 @@ namespace ChatApp_Backend
                 });
             }
             app.MapHub<ChatHub>("/chatHub");
-            app.MapHub<ChatHub>("/videoHub");
+            app.MapHub<VideoHub>("/videoHub");
             //app.UseCors("PolicyCors");
             app.UseCors("AllowAll");
             app.UseStaticFiles();
