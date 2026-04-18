@@ -14,6 +14,7 @@ namespace ChatApp_Backend.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<object>), 400)]
     public class GroupController : ControllerBase
     {
         private readonly IMapper mapper;
@@ -31,6 +32,7 @@ namespace ChatApp_Backend.Controllers
             this.userService = userService;
         }
         [HttpPost("CreateGroup")]
+        [ProducesResponseType(typeof(ApiResponse<GroupResponseDTO>), 200)]
         public async Task<IActionResult> CreateGroup(CreateGroupRequestDTO request)
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -52,6 +54,7 @@ namespace ChatApp_Backend.Controllers
             return Ok(ApiResponse<GroupResponseDTO>.SuccessResponse(groupResponseDTO));
         }
         [HttpPost("JoinGroup/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<object>), 200)]
         public async Task<IActionResult> JoinGroup(int id)
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -64,6 +67,7 @@ namespace ChatApp_Backend.Controllers
             return Ok(ApiResponse<object>.SuccessResponse(null));
         }
         [HttpDelete("LeaveGroup/{id}")]
+        [ProducesResponseType(204)]
         public async Task<IActionResult> LeaveGroup(int id)
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -79,6 +83,7 @@ namespace ChatApp_Backend.Controllers
             return NoContent();
         }
         [HttpDelete("DeleteGroup/{id}")]
+        [ProducesResponseType(204)]
         public async Task<IActionResult> DeleteGroup(int id)
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -92,6 +97,7 @@ namespace ChatApp_Backend.Controllers
         }
 
         [HttpGet("NumOFUser/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<int>), 200)]
         public IActionResult GetNumOfUserInGroup(int id)
         {
             Group? group = groupRepositroy.GetGroupById(id);
@@ -101,6 +107,7 @@ namespace ChatApp_Backend.Controllers
         }
 
         [HttpGet("GetUserGroups")]
+        [ProducesResponseType(typeof(ApiResponse<List<GroupResponseDTO>>), 200)]
         public async Task<IActionResult> GetUserGroups()
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);

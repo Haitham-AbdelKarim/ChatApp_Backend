@@ -1,8 +1,10 @@
-﻿using ChatApp_Backend.DTO;
+﻿using AutoMapper;
+using ChatApp_Backend.DTO;
+using ChatApp_Backend.DTO.Account;
+using ChatApp_Backend.DTO.Group;
 using ChatApp_Backend.Models;
 using ChatApp_Backend.Repository;
 using ChatApp_Backend.Services;
-using AutoMapper;
 using Google.Apis.Auth;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
@@ -11,12 +13,12 @@ using Microsoft.VisualBasic;
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
 using System.Text.Json;
-using ChatApp_Backend.DTO.Account;
 
 namespace ChatApp_Backend.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
+    [ProducesResponseType(typeof(ApiResponse<object>), 400)]
     public class AccountController : ControllerBase
     {
         private readonly IUserRepository userRepository;
@@ -35,6 +37,7 @@ namespace ChatApp_Backend.Controllers
         }
         [HttpPost("Register")]
         [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<RegisterLoginResponseDTO>), 200)]
         public async Task<IActionResult> Register(RegisterRequestDTO request)
         {
             var user = await userRepository.GetUserByEmail(request.Email);
@@ -59,6 +62,7 @@ namespace ChatApp_Backend.Controllers
         }
         [HttpPost("Login")]
         [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<RegisterLoginResponseDTO>), 200)]
         public async Task<IActionResult> Login(LoginRequestDTO loginRequest)
         {
             AppUser? user = await userRepository.GetUserByEmail(loginRequest.Email);
@@ -86,6 +90,7 @@ namespace ChatApp_Backend.Controllers
         }
         [HttpGet("CurrentUser")]
         [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<RegisterLoginResponseDTO>), 200)]
         public async Task<IActionResult> GetCurrentUser()
         {
             Claim? claim = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);
@@ -104,6 +109,7 @@ namespace ChatApp_Backend.Controllers
 
         [HttpPost("NewAccessToken")]
         [AllowAnonymous]
+        [ProducesResponseType(typeof(ApiResponse<NewAccessTokenResponse>), 200)]
         public async Task<IActionResult> NewAccessToken(AccessTokenRequest request)
         {
             string hashedRefreshToken = tokenService.HashRefreshToken(request.RefreshToken);
@@ -117,17 +123,20 @@ namespace ChatApp_Backend.Controllers
                 return BadRequest(ApiResponse<object>.FailResponse("RefreshToken Expired"));
             }
             string accessToken = await tokenService.GenerateAccessToken(user);
-            return Ok(ApiResponse<object>.SuccessResponse(new { accessToken = accessToken }));
+            NewAccessTokenResponse response = new NewAccessTokenResponse { AccessToken = accessToken };
+            return Ok(ApiResponse<NewAccessTokenResponse>.SuccessResponse(response));
         }
 
         [HttpGet("/auth/google")]
         [AllowAnonymous]
+        [ProducesResponseType(302)]
         public IActionResult GetGoogleAuthUri()
         {
             GoogleUrlBuilderDTO googleUrlBuilder = tokenService.BuildGoogleAuthUrl();
             return Redirect(googleUrlBuilder.ToString());
         }
         [HttpGet("/auth/google/callback")]
+        [ProducesResponseType(typeof(ApiResponse<RegisterLoginResponseDTO>), 200)]
         public async Task<IActionResult> GetCodeResponse([FromQuery]string code)
         {
             GoogleUrlBuilderDTO googleUrlBuilder = tokenService.BuildGoogleAuthUrl();
@@ -191,6 +200,7 @@ namespace ChatApp_Backend.Controllers
 
         [HttpGet("logout")]
         [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<object>), 200)]
         public async Task<IActionResult> Logout()
         {
             Claim? claim = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.Email);

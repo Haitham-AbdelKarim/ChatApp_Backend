@@ -1,4 +1,5 @@
 ﻿using ChatApp_Backend.DTO;
+using ChatApp_Backend.DTO.Group;
 using ChatApp_Backend.DTO.Message;
 using ChatApp_Backend.Models;
 using ChatApp_Backend.Repository;
@@ -12,6 +13,7 @@ namespace ChatApp_Backend.Controllers
     [Route("api/[controller]")]
     [ApiController]
     [Authorize]
+    [ProducesResponseType(typeof(ApiResponse<object>), 400)]
     public class ChatController : ControllerBase
     {
         private readonly IMessageRepository messageRepository;
@@ -25,6 +27,7 @@ namespace ChatApp_Backend.Controllers
             this.userService = userService;
         }
         [HttpGet("GetUserChats")]
+        [ProducesResponseType(typeof(ApiResponse<List<GetChatsDTO>>), 200)]
         public async Task<IActionResult> GetUserChat()
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -32,6 +35,8 @@ namespace ChatApp_Backend.Controllers
             List<GetChatsDTO> chats = messageRepository.GetUserChats(appuser);
             return Ok(ApiResponse<List<GetChatsDTO>>.SuccessResponse(chats));
         }
+        [HttpGet("GetDirectChatMessage/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<List<MessageDTO>>), 200)]
         public async Task<IActionResult> GetDirectChatMessage(string id)
         {
             AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
@@ -40,8 +45,18 @@ namespace ChatApp_Backend.Controllers
             return Ok(ApiResponse<List<MessageDTO>>.SuccessResponse(chat));
         }
 
+        [HttpGet("GetGroupChatMessage/{id}")]
+        [ProducesResponseType(typeof(ApiResponse<List<MessageDTO>>), 200)]
+        public async Task<IActionResult> GetGroupChatMessage(int id)
+        {
+            AppUser? appuser = await userService.GetCurrentUser(httpContextAccessor);
+            if (appuser == null) return BadRequest(ApiResponse<object>.FailResponse("Can Not Get The Current User"));
+            List<MessageDTO> chat = messageRepository.GetGroupChatMessage(id);
+            return Ok(ApiResponse<List<MessageDTO>>.SuccessResponse(chat));
+        }
+
         [HttpPost("upload")]
-        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<string>), 200)]
         public async Task<IActionResult> Upload([FromForm] IFormFile file)
         {
             if (file == null || file.Length == 0)

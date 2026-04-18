@@ -34,7 +34,7 @@ namespace ChatApp_Backend.Hubs
             return;
         }
 
-        public async Task SendMessage(string receiverId, string message, MessageType type)
+        public async Task SendDirectMessage(string receiverId, string message, MessageType type)
         {
             var senderId = Context.UserIdentifier;
 
@@ -58,6 +58,30 @@ namespace ChatApp_Backend.Hubs
             });
             // send back to sender (for UI sync)
             await Clients.Caller.SendAsync("ReceiveMessage", msg);
+        }
+
+        public async Task SendGroupMessage(int groupId, string message, MessageType type)
+        {
+            var senderId = Context.UserIdentifier;
+
+            var msg = new Messages
+            {
+                SenderId = senderId,
+                GroupId = groupId,
+                Message = message, // text OR file path
+                MessageType = type,
+                SendingTime = DateTime.Now
+            };
+            messageRepository.CreateMessage(msg);
+            // send to receiver
+            await Clients.Group(groupId.ToString()).SendAsync("ReceiveMessage", new
+            {
+                msg.Id,
+                msg.Message,
+                msg.MessageType,
+                msg.SenderId,
+                msg.SendingTime
+            });
         }
 
         public override async Task OnDisconnectedAsync(Exception? exception)

@@ -43,9 +43,19 @@ namespace ChatApp_Backend
             builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
             builder.Services.AddCors(setup =>
             {
-                setup.AddPolicy("PolicyCors", builder =>
+                //setup.AddPolicy("PolicyCors", builder =>
+                //{
+                //    builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+                //});
+
+                setup.AddPolicy("AllowAll", policy =>
                 {
-                    builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+                    policy
+                        .WithOrigins("null", "http://localhost:3000", "http://localhost:5238") // add any other origins you need
+                        .SetIsOriginAllowed(_ => true)  // allows file:// (origin: null) and any localhost
+                        .AllowAnyHeader()
+                        .AllowAnyMethod()
+                        .AllowCredentials(); // required for SignalR with JWT
                 });
             });
 
@@ -144,7 +154,8 @@ namespace ChatApp_Backend
             }
             app.MapHub<ChatHub>("/chatHub");
             app.MapHub<ChatHub>("/videoHub");
-            app.UseCors("PolicyCors");
+            //app.UseCors("PolicyCors");
+            app.UseCors("AllowAll");
             app.UseStaticFiles();
             app.UseExceptionHandler(o => { });
             app.UseAuthentication();
