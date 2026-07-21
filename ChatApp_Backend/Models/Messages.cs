@@ -5,9 +5,8 @@ namespace ChatApp_Backend.Models
     public enum MessageType
     {
         Text,
-        Audio,
-        Video,
-        Photo
+        Image,
+        File
     }
     public class Messages
     {

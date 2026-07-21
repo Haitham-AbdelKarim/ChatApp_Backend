@@ -91,6 +91,7 @@ namespace ChatApp_Backend
                 config.CreateMap<CreateGroupRequestDTO, Group>();
                 config.CreateMap<Group, GroupResponseDTO>();
                 config.CreateMap<Messages, MessageDTO>();
+                config.CreateMap<AppUser, UserSearchResultDTO>();
 
             });
 

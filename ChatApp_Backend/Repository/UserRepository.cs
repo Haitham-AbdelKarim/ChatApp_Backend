@@ -84,8 +84,19 @@ namespace ChatApp_Backend.Repository
         public async Task<AppUser?> GetUserById(string id)
         {
             AppUser? user = await userManager.Users.Include(u => u.Groups).FirstOrDefaultAsync(u => u.Id == id);
-            //AppUser? user = await userManager.FindByEmailAsync(email);
             return user;
+        }
+
+        public async Task<List<AppUser>> SearchUsers(string query, string currentUserId)
+        {
+            return await userManager.Users
+                .Where(u => u.Id != currentUserId &&
+                    (u.Email!.Contains(query) ||
+                     u.FirstName.Contains(query) ||
+                     u.LastName.Contains(query) ||
+                     u.UserName!.Contains(query)))
+                .Take(20)
+                .ToListAsync();
         }
     }
 }

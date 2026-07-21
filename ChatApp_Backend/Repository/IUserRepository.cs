@@ -17,5 +17,6 @@ namespace ChatApp_Backend.Repository
         public Task<int> CountUserNameStartWith(string name);
         public Task<bool> CheckUserPassword(AppUser user, string  password);
         public Task<IdentityResult> UpdateUser(AppUser user);
+        public Task<List<AppUser>> SearchUsers(string query, string currentUserId);
     }
 }

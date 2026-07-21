@@ -26,14 +26,16 @@ namespace ChatApp_Backend.Controllers
         private readonly ITokenService tokenService;
         private readonly IUserService userService;
         private readonly IHttpContextAccessor httpContextAccessor;
+        private readonly IConfiguration configuration;
 
-        public AccountController(IUserRepository userRepository, IMapper mapper, ITokenService tokenService, IUserService userService, IHttpContextAccessor httpContextAccessor)
+        public AccountController(IUserRepository userRepository, IMapper mapper, ITokenService tokenService, IUserService userService, IHttpContextAccessor httpContextAccessor, IConfiguration configuration)
         {
             this.userRepository = userRepository;
             this.mapper = mapper;
             this.tokenService = tokenService;
             this.userService = userService;
             this.httpContextAccessor = httpContextAccessor;
+            this.configuration = configuration;
         }
         [HttpPost("Register")]
         [AllowAnonymous]
@@ -195,7 +197,34 @@ namespace ChatApp_Backend.Controllers
             RegisterLoginResponseDTO responseDTO = mapper.Map<RegisterLoginResponseDTO>(user);
             responseDTO.AccessToken = await tokenService.GenerateAccessToken(user);
             responseDTO.RefreshToken = refreshTokenHashed.RefreshToken;
-            return Ok(ApiResponse<RegisterLoginResponseDTO>.SuccessResponse(responseDTO));
+
+            var frontendBaseUrl = configuration["FrontendBaseUrl"] ?? "http://localhost:4200";
+            var redirectUrl = $"{frontendBaseUrl}/auth/callback" +
+                $"?accessToken={Uri.EscapeDataString(responseDTO.AccessToken)}" +
+                $"&refreshToken={Uri.EscapeDataString(responseDTO.RefreshToken)}" +
+                $"&id={Uri.EscapeDataString(responseDTO.Id)}" +
+                $"&firstName={Uri.EscapeDataString(responseDTO.FirstName)}" +
+                $"&lastName={Uri.EscapeDataString(responseDTO.LastName)}" +
+                $"&email={Uri.EscapeDataString(responseDTO.Email ?? "")}" +
+                $"&userName={Uri.EscapeDataString(responseDTO.UserName ?? "")}";
+            return Redirect(redirectUrl);
+        }
+
+        [HttpGet("SearchUsers")]
+        [Authorize]
+        [ProducesResponseType(typeof(ApiResponse<List<UserSearchResultDTO>>), 200)]
+        public async Task<IActionResult> SearchUsers([FromQuery] string query)
+        {
+            Claim? claim = httpContextAccessor.HttpContext?.User.Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier);
+            if (claim == null)
+                return BadRequest(ApiResponse<object>.FailResponse("Can Not Get The Current User"));
+
+            if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+                return Ok(ApiResponse<List<UserSearchResultDTO>>.SuccessResponse(new List<UserSearchResultDTO>()));
+
+            var users = await userRepository.SearchUsers(query, claim.Value);
+            var results = mapper.Map<List<UserSearchResultDTO>>(users);
+            return Ok(ApiResponse<List<UserSearchResultDTO>>.SuccessResponse(results));
         }
 
         [HttpGet("logout")]

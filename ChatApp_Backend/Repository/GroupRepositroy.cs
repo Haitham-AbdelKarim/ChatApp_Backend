@@ -24,7 +24,7 @@ namespace ChatApp_Backend.Repository
 
         public List<Group> GetAllGroups()
         {
-            return chatAppDbContext.Groups.ToList();
+            return chatAppDbContext.Groups.Include(g => g.Users).ToList();
         }
 
         public Group? GetGroupById(int id)

@@ -47,17 +47,22 @@ namespace ChatApp_Backend.Hubs
                 SendingTime = DateTime.Now
             };
             messageRepository.CreateMessage(msg);
-            // send to receiver
-            await Clients.User(receiverId).SendAsync("ReceiveMessage", new
+
+            var payload = new
             {
                 msg.Id,
                 msg.Message,
                 msg.MessageType,
                 msg.SenderId,
+                msg.ReceiverId,
+                GroupId = (int?)null,
                 msg.SendingTime
-            });
+            };
+
+            // send to receiver
+            await Clients.User(receiverId).SendAsync("ReceiveMessage", payload);
             // send back to sender (for UI sync)
-            await Clients.Caller.SendAsync("ReceiveMessage", msg);
+            await Clients.Caller.SendAsync("ReceiveMessage", payload);
         }
 
         public async Task SendGroupMessage(int groupId, string message, MessageType type)
@@ -73,13 +78,14 @@ namespace ChatApp_Backend.Hubs
                 SendingTime = DateTime.Now
             };
             messageRepository.CreateMessage(msg);
-            // send to receiver
+            // send to group
             await Clients.Group(groupId.ToString()).SendAsync("ReceiveMessage", new
             {
                 msg.Id,
                 msg.Message,
                 msg.MessageType,
                 msg.SenderId,
+                msg.GroupId,
                 msg.SendingTime
             });
         }

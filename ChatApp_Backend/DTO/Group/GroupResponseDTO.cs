@@ -11,5 +11,6 @@ namespace ChatApp_Backend.DTO.Group
         public string? Description { get; set; }
         public DateTime CreatedAt { get; set; }
         public int NumOFUsers { get; set; }
+        public bool IsMember { get; set; }
     }
 }
