@@ -50,6 +50,11 @@ namespace ChatApp_Backend.RealTime.Sockets
         {
             try
             {
+                if (!await TryHandshakeAsync(client, stoppingToken))
+                {
+                    return;
+                }
+
                 var buffer = new byte[4096];
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -58,9 +63,6 @@ namespace ChatApp_Backend.RealTime.Sockets
                     {
                         break;
                     }
-
-                    // Phase 1 milestone: echo the received bytes back.
-                    await client.SendAsync(buffer.AsMemory(0, read), SocketFlags.None, stoppingToken);
                 }
             }
             catch (OperationCanceledException)
@@ -80,6 +82,58 @@ namespace ChatApp_Backend.RealTime.Sockets
                 try { client.Shutdown(SocketShutdown.Both); } catch { }
                 client.Close();
             }
+        }
+
+        private async Task<bool> TryHandshakeAsync(Socket client, CancellationToken stoppingToken)
+        {
+            var accumulated = new List<byte>(1024);
+            var readBuffer = new byte[1024];
+
+            while (!stoppingToken.IsCancellationRequested)
+            {
+                int read = await client.ReceiveAsync(readBuffer, SocketFlags.None, stoppingToken);
+                if (read == 0)
+                {
+                    return false;
+                }
+
+                accumulated.AddRange(readBuffer.AsSpan(0, read).ToArray());
+
+                if (accumulated.Count > 8192)
+                {
+                    await client.SendAsync(WebSocketHandshake.BuildErrorResponse(400, "Request headers too large"), SocketFlags.None, stoppingToken);
+                    return false;
+                }
+
+                bool parsed = WebSocketHandshake.TryParseRequest(
+                    accumulated.ToArray(),
+                    out WebSocketUpgradeRequest? request,
+                    out int consumedBytes,
+                    out string? error);
+
+                if (error != null)
+                {
+                    await client.SendAsync(WebSocketHandshake.BuildErrorResponse(400, error), SocketFlags.None, stoppingToken);
+                    return false;
+                }
+
+                if (request == null)
+                {
+                    continue; // need more data
+                }
+
+                if (!WebSocketHandshake.ValidateProtocol(request, out error))
+                {
+                    await client.SendAsync(WebSocketHandshake.BuildErrorResponse(400, error ?? "Invalid handshake"), SocketFlags.None, stoppingToken);
+                    return false;
+                }
+
+                string acceptKey = WebSocketHandshake.ComputeAcceptKey(request.SecWebSocketKey!);
+                await client.SendAsync(WebSocketHandshake.BuildSuccessResponse(acceptKey), SocketFlags.None, stoppingToken);
+                return true;
+            }
+
+            return false;
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
