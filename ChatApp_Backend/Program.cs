@@ -105,16 +105,7 @@ namespace ChatApp_Backend
                 //option.UseSecurityTokenValidators = true;
                 option.RequireHttpsMetadata = false;
                 option.SaveToken = true;
-                option.TokenValidationParameters = new TokenValidationParameters
-                {
-                    ValidateIssuer = true,
-                    ValidateAudience = true,
-                    ValidateLifetime = true,
-                    ValidateIssuerSigningKey = true,
-                    ValidIssuer = builder.Configuration["JwtSetting:Issuer"],
-                    ValidAudience = builder.Configuration["JwtSetting:Audience"],
-                    IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(builder.Configuration["JwtSetting:Key"] ?? string.Empty))
-                };
+                option.TokenValidationParameters = JwtConfiguration.Create(builder.Configuration);
 
                 option.Events = new JwtBearerEvents
                 {
@@ -137,6 +128,7 @@ namespace ChatApp_Backend
             builder.Services.AddHttpClient();
 
             builder.Services.Configure<SocketServerOptions>(builder.Configuration.GetSection("SocketServer"));
+            builder.Services.AddSingleton<Microsoft.IdentityModel.Tokens.TokenValidationParameters>(sp => JwtConfiguration.Create(builder.Configuration));
             builder.Services.AddHostedService<SocketServerHostedService>();
 
             builder.Services.AddEndpointsApiExplorer();
