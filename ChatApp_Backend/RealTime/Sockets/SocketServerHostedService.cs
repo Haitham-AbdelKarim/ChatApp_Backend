@@ -55,6 +55,7 @@ namespace ChatApp_Backend.RealTime.Sockets
                     return;
                 }
 
+                var reader = new WebSocketFrameReader(options.MaxMessageSize);
                 var buffer = new byte[4096];
                 while (!stoppingToken.IsCancellationRequested)
                 {
@@ -62,6 +63,49 @@ namespace ChatApp_Backend.RealTime.Sockets
                     if (read == 0)
                     {
                         break;
+                    }
+
+                    reader.Feed(buffer.AsSpan(0, read));
+
+                    while (true)
+                    {
+                        bool ok = reader.TryReadMessage(out WebSocketMessage? message, out string? error);
+                        if (!ok)
+                        {
+                            if (error != null)
+                            {
+                                await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(1002, error), SocketFlags.None, stoppingToken);
+                            }
+                            break;
+                        }
+
+                        if (message == null)
+                        {
+                            break;
+                        }
+
+                        if (message.Opcode == WebSocketOpcode.Close)
+                        {
+                            await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(message.CloseStatus, message.CloseReason), SocketFlags.None, stoppingToken);
+                            return;
+                        }
+
+                        if (message.Opcode == WebSocketOpcode.Ping)
+                        {
+                            await client.SendAsync(WebSocketFrameWriter.CreatePongFrame(message.Payload), SocketFlags.None, stoppingToken);
+                            continue;
+                        }
+
+                        if (message.Opcode == WebSocketOpcode.Pong)
+                        {
+                            continue;
+                        }
+
+                        if (message.Opcode == WebSocketOpcode.Text)
+                        {
+                            string text = System.Text.Encoding.UTF8.GetString(message.Payload);
+                            await client.SendAsync(WebSocketFrameWriter.CreateTextFrame("echo: " + text), SocketFlags.None, stoppingToken);
+                        }
                     }
                 }
             }
