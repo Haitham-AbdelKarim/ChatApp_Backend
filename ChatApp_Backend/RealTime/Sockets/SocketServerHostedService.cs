@@ -55,58 +55,111 @@ namespace ChatApp_Backend.RealTime.Sockets
                     return;
                 }
 
+                using var connectionCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                CancellationToken connectionToken = connectionCts.Token;
+
                 var reader = new WebSocketFrameReader(options.MaxMessageSize);
                 var buffer = new byte[4096];
-                while (!stoppingToken.IsCancellationRequested)
+
+                object pongLock = new();
+                DateTime lastPong = DateTime.UtcNow;
+
+                Task heartbeatTask = Task.Run(async () =>
                 {
-                    int read = await client.ReceiveAsync(buffer, SocketFlags.None, stoppingToken);
-                    if (read == 0)
+                    try
                     {
-                        break;
-                    }
-
-                    reader.Feed(buffer.AsSpan(0, read));
-
-                    while (true)
-                    {
-                        bool ok = reader.TryReadMessage(out WebSocketMessage? message, out string? error);
-                        if (!ok)
+                        while (!connectionToken.IsCancellationRequested)
                         {
-                            if (error != null)
+                            await Task.Delay(TimeSpan.FromSeconds(options.HeartbeatIntervalSeconds), connectionToken);
+
+                            lock (pongLock)
                             {
-                                await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(1002, error), SocketFlags.None, stoppingToken);
+                                if (DateTime.UtcNow - lastPong > TimeSpan.FromSeconds(options.HeartbeatTimeoutSeconds))
+                                {
+                                    connectionCts.Cancel();
+                                    return;
+                                }
                             }
-                            break;
-                        }
 
-                        if (message == null)
-                        {
-                            break;
-                        }
-
-                        if (message.Opcode == WebSocketOpcode.Close)
-                        {
-                            await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(message.CloseStatus, message.CloseReason), SocketFlags.None, stoppingToken);
-                            return;
-                        }
-
-                        if (message.Opcode == WebSocketOpcode.Ping)
-                        {
-                            await client.SendAsync(WebSocketFrameWriter.CreatePongFrame(message.Payload), SocketFlags.None, stoppingToken);
-                            continue;
-                        }
-
-                        if (message.Opcode == WebSocketOpcode.Pong)
-                        {
-                            continue;
-                        }
-
-                        if (message.Opcode == WebSocketOpcode.Text)
-                        {
-                            string text = System.Text.Encoding.UTF8.GetString(message.Payload);
-                            await client.SendAsync(WebSocketFrameWriter.CreateTextFrame("echo: " + text), SocketFlags.None, stoppingToken);
+                            try
+                            {
+                                await client.SendAsync(WebSocketFrameWriter.CreatePingFrame(), SocketFlags.None, connectionToken);
+                            }
+                            catch
+                            {
+                                connectionCts.Cancel();
+                                return;
+                            }
                         }
                     }
+                    catch (OperationCanceledException)
+                    {
+                        // expected on shutdown/timeout
+                    }
+                }, connectionToken);
+
+                try
+                {
+                    while (!connectionToken.IsCancellationRequested)
+                    {
+                        int read = await client.ReceiveAsync(buffer, SocketFlags.None, connectionToken);
+                        if (read == 0)
+                        {
+                            break;
+                        }
+
+                        reader.Feed(buffer.AsSpan(0, read));
+
+                        while (true)
+                        {
+                            bool ok = reader.TryReadMessage(out WebSocketMessage? message, out string? error);
+                            if (!ok)
+                            {
+                                if (error != null)
+                                {
+                                    await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(1002, error), SocketFlags.None, connectionToken);
+                                }
+                                break;
+                            }
+
+                            if (message == null)
+                            {
+                                break;
+                            }
+
+                            if (message.Opcode == WebSocketOpcode.Close)
+                            {
+                                await client.SendAsync(WebSocketFrameWriter.CreateCloseFrame(message.CloseStatus, message.CloseReason), SocketFlags.None, connectionToken);
+                                return;
+                            }
+
+                            if (message.Opcode == WebSocketOpcode.Ping)
+                            {
+                                await client.SendAsync(WebSocketFrameWriter.CreatePongFrame(message.Payload), SocketFlags.None, connectionToken);
+                                continue;
+                            }
+
+                            if (message.Opcode == WebSocketOpcode.Pong)
+                            {
+                                lock (pongLock)
+                                {
+                                    lastPong = DateTime.UtcNow;
+                                }
+                                continue;
+                            }
+
+                            if (message.Opcode == WebSocketOpcode.Text)
+                            {
+                                string text = System.Text.Encoding.UTF8.GetString(message.Payload);
+                                await client.SendAsync(WebSocketFrameWriter.CreateTextFrame("echo: " + text), SocketFlags.None, connectionToken);
+                            }
+                        }
+                    }
+                }
+                finally
+                {
+                    connectionCts.Cancel();
+                    try { await heartbeatTask; } catch (OperationCanceledException) { }
                 }
             }
             catch (OperationCanceledException)
