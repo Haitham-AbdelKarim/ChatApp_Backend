@@ -6,6 +6,8 @@ using ChatApp_Backend.DTO.Message;
 using ChatApp_Backend.Exceptions;
 using ChatApp_Backend.Hubs;
 using ChatApp_Backend.Models;
+using ChatApp_Backend.RealTime.Options;
+using ChatApp_Backend.RealTime.Sockets;
 using ChatApp_Backend.Repository;
 using ChatApp_Backend.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -43,19 +45,17 @@ namespace ChatApp_Backend
             builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
             builder.Services.AddCors(setup =>
             {
-                //setup.AddPolicy("PolicyCors", builder =>
-                //{
-                //    builder.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-                //});
-
                 setup.AddPolicy("AllowAll", policy =>
                 {
+                    var allowedOrigins = builder.Configuration.GetSection("Cors:AllowedOrigins").Get<string[]>()
+                        ?? new[] { "http://localhost:4200", "http://localhost:5238" };
+
                     policy
-                        .WithOrigins("null", "http://localhost:3000", "http://localhost:5238") // add any other origins you need
-                        .SetIsOriginAllowed(_ => true)  // allows file:// (origin: null) and any localhost
+                        .WithOrigins(allowedOrigins)
+                        .SetIsOriginAllowed(_ => true)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
-                        .AllowCredentials(); // required for SignalR with JWT
+                        .AllowCredentials();
                 });
             });
 
@@ -136,31 +136,21 @@ namespace ChatApp_Backend
             builder.Services.AddSignalR();
             builder.Services.AddHttpClient();
 
-            // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
-            builder.Services.AddOpenApi();
+            builder.Services.Configure<SocketServerOptions>(builder.Configuration.GetSection("SocketServer"));
+            builder.Services.AddHostedService<SocketServerHostedService>();
 
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             var app = builder.Build();
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
-            {
-                app.MapOpenApi();
-                app.UseSwaggerUI(options =>
-                {
-                    // Connect Swagger UI to the built-in OpenAPI document
-                    options.SwaggerEndpoint("/openapi/v1.json", "v1");
-                    options.EnablePersistAuthorization();
-                });
-            }
+
             app.MapHub<ChatHub>("/chatHub");
             app.MapHub<VideoHub>("/videoHub");
-            //app.UseCors("PolicyCors");
             app.UseCors("AllowAll");
+            app.UseDefaultFiles();
             app.UseStaticFiles();
             app.UseExceptionHandler(o => { });
             app.UseAuthentication();
             app.UseAuthorization();
+            app.MapFallbackToFile("index.html");
             app.MapControllers();
             app.Run();
         }
